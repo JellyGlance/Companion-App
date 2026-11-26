@@ -2,7 +2,7 @@
 
 # JellyGlance Companion for Android
 
-A native Android app (Kotlin + Jetpack Compose) for [JellyGlance](https://jellyglance.com): your Jellyfin server's streams, stats, requests, libraries and health in your pocket. A real APK, not a PWA.
+A native Android app (Kotlin + Jetpack Compose) for [JellyGlance](https://jellyglance.com): your Jellyfin server's streams, stats, requests, libraries and health in your pocket.
 
 ## Features
 
