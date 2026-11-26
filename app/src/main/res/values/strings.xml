@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">JellyGlance</string>
+    <string name="widget_name">JellyGlance at a glance</string>
+    <string name="widget_description">Streams, downloads, requests and server health.</string>
+    <string name="shortcut_streams">Streams</string>
+    <string name="shortcut_requests">Requests</string>
+    <string name="shortcut_activity">Activity</string>
+    <string name="widget_nowplaying_name">Now playing</string>
+    <string name="widget_nowplaying_description">What\'s streaming, with posters and progress.</string>
+    <string name="widget_requests_name">Pending requests</string>
+    <string name="widget_requests_description">Approve requests from your home screen.</string>
+    <string name="widget_health_name">Server health</string>
+    <string name="widget_health_description">Health and stream count.</string>
+</resources>

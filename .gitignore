@@ -1,0 +1,15 @@
+.gradle/
+build/
+/local.properties
+/keystore.properties
+*.jks
+*.keystore
+.idea/
+*.iml
+/dist/
+/keystore/
+/tools/fixtures/
+.kotlin/
+*.apk
+*.aab
+/tools/mock-posters/
