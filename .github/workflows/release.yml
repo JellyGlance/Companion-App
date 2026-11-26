@@ -1,8 +1,11 @@
 name: Build & release APK
 
-# Every push/PR builds and tests. Pushing a tag like v1.16.0 also builds the signed APK and
+# Every push/PR builds and tests. Pushing a tag like v1.0.1 also builds the signed APK and
 # publishes a GitHub release with the APK and its SHA-256, which the in-app updater checks
 # (JellyGlance/Companion-App, see UPDATE_REPO in app/build.gradle.kts).
+#
+# Uses no third-party actions (the org only allows JellyGlance-owned actions): the Ubuntu
+# runner already has git, Java 17, the Android SDK, jq and the gh CLI.
 
 on:
   push:
@@ -17,14 +20,22 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-      - uses: android-actions/setup-android@v3
-      - uses: gradle/actions/setup-gradle@v4
+      - name: Check out
+        run: |
+          git init -q .
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+          git fetch -q --depth 1 origin "$GITHUB_SHA"
+          git checkout -q FETCH_HEAD
+
+      - name: Use Java 17 and the runner's Android SDK
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - name: Check the tag matches versionName
         if: startsWith(github.ref, 'refs/tags/v')
@@ -49,7 +60,10 @@ jobs:
           echo "$KEYSTORE_B64" | base64 -d > keystore/jellyglance-release.jks
           printf 'storeFile=keystore/jellyglance-release.jks\nstorePassword=%s\nkeyAlias=jellyglance\nkeyPassword=%s\n' "$KEYSTORE_PASSWORD" "$KEYSTORE_PASSWORD" > keystore.properties
 
-      - run: ./gradlew testDebugUnitTest assembleRelease --console=plain
+      - name: Test and build
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest assembleRelease --console=plain
 
       - name: Name the APK and checksum
         run: |
@@ -57,11 +71,6 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "$name"
           sha256sum "$name" > "$name.sha256"
           cat "$name.sha256"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: apk
-          path: JellyGlance-Companion-*
 
       - name: Release notes from CHANGELOG.md
         if: startsWith(github.ref, 'refs/tags/v')
@@ -71,15 +80,16 @@ jobs:
           [ -s release-notes.md ] || echo "See CHANGELOG.md" > release-notes.md
           cat release-notes.md
 
-      - uses: softprops/action-gh-release@v2
-        id: release
+      - name: Publish the release
         if: startsWith(github.ref, 'refs/tags/v')
-        with:
-          name: JellyGlance Companion ${{ github.ref_name }}
-          body_path: release-notes.md
-          files: |
-            JellyGlance-Companion-*.apk
-            JellyGlance-Companion-*.apk.sha256
+        run: |
+          apk="JellyGlance-Companion-$GITHUB_REF_NAME.apk"
+          if gh release view "$GITHUB_REF_NAME" --repo "$REPO" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$apk" "$apk.sha256" --clobber --repo "$REPO"
+          else
+            gh release create "$GITHUB_REF_NAME" "$apk" "$apk.sha256" --repo "$REPO" \
+              --title "JellyGlance Companion $GITHUB_REF_NAME" --notes-file release-notes.md
+          fi
 
       # Optional: announce the release to a webhook (Discord, or anything that accepts JSON).
       # Set the repo secret RELEASE_WEBHOOK_URL to turn it on; without it this step is skipped.
@@ -87,16 +97,15 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           WEBHOOK_URL: ${{ secrets.RELEASE_WEBHOOK_URL }}
-          RELEASE_URL: ${{ steps.release.outputs.url }}
-          REPO: ${{ github.repository }}
         run: |
           if [ -z "$WEBHOOK_URL" ]; then echo "RELEASE_WEBHOOK_URL not set, skipping"; exit 0; fi
           apk="JellyGlance-Companion-$GITHUB_REF_NAME.apk"
+          release_url="https://github.com/$REPO/releases/tag/$GITHUB_REF_NAME"
           apk_url="https://github.com/$REPO/releases/download/$GITHUB_REF_NAME/$apk"
           sha=$(cut -d' ' -f1 "$apk.sha256")
           notes=$(head -c 1500 release-notes.md)
           # Discord reads content/embeds; other services get the same fields as plain JSON.
-          jq -n --arg v "$GITHUB_REF_NAME" --arg url "$RELEASE_URL" --arg apk "$apk_url" --arg sha "$sha" --arg notes "$notes" '{
+          jq -n --arg v "$GITHUB_REF_NAME" --arg url "$release_url" --arg apk "$apk_url" --arg sha "$sha" --arg notes "$notes" '{
             username: "JellyGlance",
             content: "JellyGlance Companion \($v) is out",
             embeds: [{
